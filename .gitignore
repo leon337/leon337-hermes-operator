@@ -1,0 +1,32 @@
+# Secrets / credentials
+.env
+.env.*
+*.pem
+*.key
+*.token
+secrets/
+credentials/
+
+# Local/runtime Hermes state
+.hermes/
+runtime/
+state/
+
+# Raw operational evidence — keep local unless sanitized
+logs/
+screenshots/
+recordings/
+raw-evidence/
+artifacts/private/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*~
