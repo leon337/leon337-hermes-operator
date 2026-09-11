@@ -27,6 +27,19 @@ Current VPS runtime includes:
 
 The existing `mcf-hermes-relay` is not the transport for Remote Client V1.
 
+### 2.1 Decision precedence and reconciliation with the August architecture
+
+The August 2026 Project Intent Package and Architecture v1.1 established the first computer-use MVP as local to LEANDRO's notebook. That decision described the deployment boundary required for the original GUI-operator validation.
+
+The human decision of 2026-09-10 changes the **current deployment boundary** for the new Remote Client workstream:
+
+- the canonical Hermes runtime now remains on the VPS;
+- the notebook becomes a human client for Hermes;
+- the previous notebook-local computer-use MVP remains historical design context and is not the deployment target of Remote Client V1;
+- the original product principle is preserved: use the official Hermes Agent as the core and avoid a parallel agent or fork by default.
+
+For current-state recovery, this design and the new versioned current-state document take precedence over older deployment-location statements. Historical documents are not rewritten to pretend the earlier decision never existed.
+
 ## 3. Architectural decision
 
 Remote Client V1 uses the canonical SSH control path from the notebook to the VPS and launches `hermes chat` on the VPS.
@@ -117,12 +130,12 @@ GitHub: leon337/leon337-hermes-operator
        v
 VPS: canonical project checkout
        |
-       | produces/defines client contract and remote entrypoint
+       | defines/tests the remote-client contract
        v
 Notebook: minimal launcher + desktop entry only
 ```
 
-The implementation plan must define an isolated branch/worktree workflow and verification before any merge or deployment.
+The implementation plan must use an isolated branch/worktree, verification before deployment, and commits before any runtime copy is treated as canonical.
 
 ## 9. MCF Context Fabric registration
 
@@ -157,7 +170,7 @@ context:
   capsule_path: .mcf/project-capsule.yaml
   canonical_entrypoints:
     - README.md
-    - docs/architecture/architecture-decision-package-v1.1.md
+    - docs/current-state.md
     - docs/superpowers/specs/2026-09-10-hermes-remote-client-context-fabric-design.md
 
 freshness:
@@ -169,17 +182,39 @@ Operational state is `LIVE_REQUIRED`: Context Fabric may recover durable project
 
 ## 10. Hermes project capsule
 
-The Hermes Operator repository currently needs a Context Fabric project capsule at:
+The Hermes Operator repository needs a Context Fabric project capsule at:
 
 `.mcf/project-capsule.yaml`
 
 It must conform to `schemas/context/project-capsule.schema.json` and use project id `leon337-hermes-operator`.
 
-The capsule will describe the current workstream as Remote Client V1 + Context Fabric integration, record that the VPS remains the canonical runtime, and point `sources.current_state` to a versioned repository document describing current project state.
+The capsule must identify:
 
-No live process status, current model availability, authentication state, or transient VPS health may be claimed from the capsule without a live observation.
+- current workstream: Remote Client V1 + Context Fabric integration;
+- current status: design approved, implementation pending until execution starts;
+- next action: execute the approved implementation plan;
+- blockers: only blockers that are actually observed at the time of materialization;
+- `sources.current_state`: `docs/current-state.md`;
+- `observed_at`: the real UTC timestamp captured when the capsule is materialized.
 
-## 11. Context Fabric boundary
+The capsule must not encode transient provider health or claim that Hermes is operational without live evidence.
+
+## 11. Current-state document
+
+Implementation creates `docs/current-state.md` in Hermes Operator as the durable human-readable reconciliation point.
+
+It must state at minimum:
+
+- the original computer-use objective remains historical project context;
+- TriView control is no longer the reason for Remote Client V1;
+- current deployment boundary is VPS runtime + notebook client;
+- `MCF-HERMES-PC-002` is not auto-resumed by this workstream;
+- Qwen remains a VPS-local provider/fallback until a separate residency decision changes that;
+- live runtime claims require live verification.
+
+This file becomes the capsule's `sources.current_state` and a canonical Context Fabric entrypoint.
+
+## 12. Context Fabric boundary
 
 Context Fabric registers and recovers project identity/context. It does not become the transport that carries interactive Hermes chat traffic.
 
@@ -196,21 +231,28 @@ SSH Remote Client
 
 These responsibilities must remain separate.
 
-## 12. V1 components
+## 13. V1 components and exact ownership
 
-The implementation will introduce only the minimum components required:
+Repository-owned implementation artifacts:
 
-- a repository-owned remote-client launcher script or launcher template;
-- tests for target resolution, remote command construction, failure behavior, and absence of embedded secrets;
-- a notebook `.desktop` entry deployed from the governed implementation;
-- `.mcf/project-capsule.yaml` in Hermes Operator;
-- a current-state document referenced by the capsule;
-- the MCF `context/projects/leon337-hermes-operator.yaml` registry entry;
-- schema validation evidence for capsule and registry entry.
+- `scripts/hermes-remote-client.sh` — notebook-side launcher logic and canonical SSH invocation;
+- `packaging/linux/hermes-agent-remote.desktop` — versioned desktop-entry template;
+- `tests/test-hermes-remote-client.sh` — launcher contract and failure-mode tests;
+- `.mcf/project-capsule.yaml` — Hermes Operator Context Fabric capsule;
+- `docs/current-state.md` — durable current-state reconciliation document.
+
+MCF-owned integration artifact:
+
+- `context/projects/leon337-hermes-operator.yaml` — project registry entry.
+
+Notebook deployment artifacts are derived copies only:
+
+- `~/.local/bin/hermes-remote-client`;
+- `~/Área de trabalho/Hermes Agent.desktop` or the desktop directory resolved from the notebook's XDG configuration.
 
 A graphical Hermes client is explicitly deferred to V2.
 
-## 13. Error handling
+## 14. Error handling
 
 Remote Client V1 must distinguish at least these failure classes:
 
@@ -223,7 +265,7 @@ Remote Client V1 must distinguish at least these failure classes:
 
 Failures must be visible to LEANDRO in plain language. The launcher must not silently fall back to a different host, direct public port, local Hermes installation, or legacy relay.
 
-## 14. Verification and acceptance
+## 15. Verification and acceptance
 
 V1 is accepted only when all of the following are verified:
 
@@ -237,10 +279,11 @@ V1 is accepted only when all of the following are verified:
 8. unavailable SSH produces a clear error and no alternate unsafe path;
 9. `.mcf/project-capsule.yaml` validates against the current MCF capsule schema;
 10. `context/projects/leon337-hermes-operator.yaml` validates against the current MCF registry-entry schema;
-11. Context Fabric resolves Hermes Operator by canonical id and at least the approved aliases;
-12. live runtime state remains explicitly separate from durable repository context.
+11. Context Fabric resolves Hermes Operator by canonical id and approved aliases;
+12. live runtime state remains explicitly separate from durable repository context;
+13. the new current-state document clearly resolves the old notebook-local deployment statement versus the new VPS-runtime decision.
 
-## 15. Non-goals for V1
+## 16. Non-goals for V1
 
 V1 does not include:
 
@@ -255,10 +298,10 @@ V1 does not include:
 - model/provider router implementation;
 - changes to TriView control.
 
-## 16. V2 direction
+## 17. V2 direction
 
 After V1 proves the remote interaction boundary, a graphical notebook client may be built on a separately approved interface. V2 may expose status, conversation, mission history, evidence, and provider visibility, but it must preserve the same rule: the VPS hosts the canonical Hermes runtime and the notebook remains a client.
 
-## 17. Governing invariant
+## 18. Governing invariant
 
 **GitHub defines; MCF discovers and governs context; VPS runs Hermes; notebook provides human access.**
