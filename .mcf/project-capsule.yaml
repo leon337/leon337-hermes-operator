@@ -4,9 +4,9 @@ purpose: Govern and extend the official Nous Research Hermes Agent as an MCF-con
 lifecycle: ACTIVE
 snapshot:
   current_workstream: remote-client-v1-context-fabric
-  current_status: REMOTE_CLIENT_V1_QUALIFIED_CONTEXT_REGISTRATION_IN_PROGRESS
-  next_action: Complete and verify the MCF Context Fabric registry integration after merging the qualified Hermes implementation to main and updating the VPS checkout from GitHub main.
+  current_status: REMOTE_CLIENT_V1_QUALIFIED_CONTEXT_FABRIC_REGISTERED
+  next_action: Await the next separately approved Hermes Operator workstream and revalidate LIVE_REQUIRED operational state before acting.
   blockers: []
 sources:
   current_state: docs/current-state.md
-observed_at: "2026-09-11T17:12:52Z"
+observed_at: "2026-09-11T18:32:11Z"
