@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Expose the single canonical Hermes runtime on the VPS to LEANDRO through a one-click notebook launcher, then register Hermes Operator as a durable project in the MCF Context Fabric.
+**Goal:** Expose the single canonical Hermes runtime on the VPS through a one-click notebook client, then register Hermes Operator as a durable project in the MCF Context Fabric.
 
-**Architecture:** The notebook remains a thin client. A repository-owned Bash launcher uses the existing canonical SSH profile to run `hermes chat` on the VPS with an interactive TTY. Hermes, provider selection, sessions, tools, memory, Qwen, and runtime state remain on the VPS. The Hermes Operator repository owns the launcher, desktop template, capsule, and current-state documentation. The MCF repository owns the Context Fabric registry entry and the resolver/schema validation evidence.
+**Architecture:** The notebook stays a thin client. A repository-owned Bash launcher uses the existing canonical SSH profile and starts `/home/ubuntu/.local/bin/hermes chat` on the VPS with an interactive TTY. Hermes, provider selection, sessions, tools, memory, Qwen, and runtime state remain on the VPS. The Hermes Operator repository owns the launcher, desktop template, capsule, and durable current-state document. The MCF repository owns the Context Fabric registry entry and resolver/schema tests.
 
 **Tech Stack:** Bash, freedesktop `.desktop`, OpenSSH, Git/GitHub, YAML, MCF Context Fabric schemas, Node 24, pnpm 11, TypeScript/Vitest.
 
@@ -13,67 +13,61 @@
 ## Global Constraints
 
 - Exactly one canonical Hermes runtime: the VPS instance under `/home/ubuntu/.hermes/hermes-agent`.
-- Do not install Hermes, Qwen, model configuration, session state, provider credentials, or Hermes secrets on the notebook.
-- Remote Client V1 transport is SSH only.
+- Do not install Hermes, Qwen, provider configuration, session state, model state, or Hermes secrets on the notebook.
+- Remote Client V1 uses SSH only.
 - Use notebook SSH config `/home/leo/.ssh/mcf-vps-control.conf` and host alias `mcf-vps-control`.
 - Remote command is `/home/ubuntu/.local/bin/hermes chat`; do not call the legacy `MCF-HERMES-PC-002` controller or relay.
 - Do not expose Qwen `:8080`, controller sockets, HTTP, VNC, WebSocket, or new public/Tailscale ports.
 - Closing the client must not stop Hermes services, Qwen, TriView, DSHs, 9Router, SentinelX, Docker, Tailscale, GitHub Runner, or the VPS graphical workstation.
-- GitHub is the canonical source; the notebook receives only deployed launcher artifacts, not a canonical project checkout.
-- Hermes Operator Context Fabric identity is `leon337-hermes-operator` with aliases `Hermes Operator`, `Hermes Agent`, and `Hermes`.
-- Context Fabric operational freshness is `LIVE_REQUIRED`; repository state must never claim live provider/session/process health.
-- Do not merge the MCF registry entry before the referenced Hermes capsule/current-state/entrypoints exist on the Hermes repository canonical branch.
+- GitHub is canonical; the notebook receives only deployed launcher artifacts, not a project checkout.
+- Context Fabric project id is `leon337-hermes-operator`; aliases are `Hermes Operator`, `Hermes Agent`, and `Hermes`.
+- Context Fabric operational freshness is `LIVE_REQUIRED`; Git state must never be treated as current runtime health.
+- Do not merge the MCF registry entry before the referenced Hermes capsule/current-state/entrypoints exist on the Hermes canonical branch.
 
 ---
 
-### Task 1: Add Hermes Operator current-state document and Context Fabric capsule
+### Task 1: Add Hermes durable current state and project capsule
 
 **Files:**
 - Create: `docs/current-state.md`
 - Create: `.mcf/project-capsule.yaml`
-- Test: `tests/test_context_capsule.py`
+- Create: `tests/test_context_contract.sh`
 
 **Interfaces:**
-- Produces: durable project identity and repository-native current state consumed later by the MCF registry entry.
-- Consumes: MCF schema `schemas/context/project-capsule.schema.json` from `leon337/multiagent-collaboration-framework`.
+- Produces durable project identity/state consumed by the MCF registry.
+- Consumes the MCF capsule schema `schemas/context/project-capsule.schema.json` for cross-repository validation.
 
-- [ ] **Step 1: Create the failing capsule test**
+- [ ] **Step 1: Write the failing contract test**
 
-Create `tests/test_context_capsule.py` with a dependency-free structural test so the Hermes repository can validate its own invariant before cross-repository schema validation:
-
-```python
-from pathlib import Path
-
-import yaml
-
-ROOT = Path(__file__).resolve().parents[1]
-CAPSULE = ROOT / ".mcf" / "project-capsule.yaml"
-CURRENT = ROOT / "docs" / "current-state.md"
-
-
-def test_capsule_identity_and_source_contract():
-    data = yaml.safe_load(CAPSULE.read_text())
-    assert data["schema_version"] == 1
-    assert data["project_id"] == "leon337-hermes-operator"
-    assert data["sources"]["current_state"] == "docs/current-state.md"
-    assert data["snapshot"]["current_workstream"] == "remote-client-v1-context-fabric"
-    assert "provider" not in data["snapshot"]
-    assert CURRENT.exists()
-```
-
-- [ ] **Step 2: Run the test and confirm RED**
-
-Run from the Hermes Operator implementation worktree:
+Create `tests/test_context_contract.sh`:
 
 ```bash
-python3 -m pytest tests/test_context_capsule.py -q
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CAPSULE="$ROOT/.mcf/project-capsule.yaml"
+CURRENT="$ROOT/docs/current-state.md"
+
+test -f "$CAPSULE"
+test -f "$CURRENT"
+grep -Fx 'project_id: leon337-hermes-operator' "$CAPSULE"
+grep -Fx '  current_workstream: remote-client-v1-context-fabric' "$CAPSULE"
+grep -Fx '  current_state: docs/current-state.md' "$CAPSULE"
+! grep -Eq '(^|[[:space:]])(provider|health|authentication_state|session_health):' "$CAPSULE"
+grep -F 'VPS' "$CURRENT"
+grep -F 'LIVE_REQUIRED' "$CURRENT"
+echo PASS
 ```
 
-Expected: FAIL because `.mcf/project-capsule.yaml` and `docs/current-state.md` do not exist.
+- [ ] **Step 2: Run and confirm RED**
+
+```bash
+bash tests/test_context_contract.sh
+```
+
+Expected: FAIL because the capsule/current-state files do not exist.
 
 - [ ] **Step 3: Create `docs/current-state.md`**
-
-The document must state only durable/reconciled facts:
 
 ```markdown
 # Hermes Operator — Current State
@@ -96,20 +90,17 @@ Remote Client V1 opens `hermes chat` on the VPS. It does not install another Her
 
 ## Operational truth
 
-Current provider, model availability, process health, session health, authentication state, and VPS health require live observation. Repository context must not be treated as proof of current runtime state.
+Current provider, model availability, process health, session health, authentication state, and VPS health are `LIVE_REQUIRED`. Repository context is not proof of current runtime state.
 ```
 
-- [ ] **Step 4: Create `.mcf/project-capsule.yaml` using a real observation timestamp**
+- [ ] **Step 4: Create the capsule with a real timestamp**
 
-Generate the timestamp first:
+Run:
 
 ```bash
 OBSERVED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-```
-
-Then write:
-
-```yaml
+mkdir -p .mcf
+cat >.mcf/project-capsule.yaml <<EOF
 schema_version: 1
 project_id: leon337-hermes-operator
 purpose: Govern and extend the official Nous Research Hermes Agent as an MCF-controlled autonomous operator while keeping LEANDRO as final human authority.
@@ -121,27 +112,43 @@ snapshot:
   blockers: []
 sources:
   current_state: docs/current-state.md
-observed_at: "${OBSERVED_AT}"
+observed_at: "$OBSERVED_AT"
+EOF
 ```
 
-The actual file must contain the concrete RFC 3339 timestamp value, not the shell expression.
-
-- [ ] **Step 5: Run the local structural test and schema validation**
-
-Run:
+- [ ] **Step 5: Run local contract test**
 
 ```bash
-python3 -m pytest tests/test_context_capsule.py -q
+chmod +x tests/test_context_contract.sh
+bash tests/test_context_contract.sh
 ```
 
-Then, using the current MCF checkout, validate the capsule with the existing `ContextSchemaValidator` by copying only the candidate YAML into a temporary fixture or invoking the validator from a small one-off Node command inside `apps/rede-social-agentes`.
+Expected: `PASS`.
 
-Expected: capsule validates against `schemas/context/project-capsule.schema.json` with `{ valid: true, errors: [] }`.
+- [ ] **Step 6: Validate the capsule with the actual MCF validator**
 
-- [ ] **Step 6: Commit**
+Copy the candidate capsule to `/tmp/hermes-project-capsule.yaml`, then from the current MCF checkout run:
 
 ```bash
-git add .mcf/project-capsule.yaml docs/current-state.md tests/test_context_capsule.py
+cd apps/rede-social-agentes
+pnpm --filter @rsa/server build
+HERMES_CAPSULE=/tmp/hermes-project-capsule.yaml node --input-type=module -e '
+import { readFileSync } from "node:fs";
+import { parse } from "yaml";
+import { ContextSchemaValidator } from "./apps/server/dist/mcf-context/context-schema.validator.js";
+const validator = new ContextSchemaValidator("../../schemas/context/project-capsule.schema.json");
+const result = validator.validate(parse(readFileSync(process.env.HERMES_CAPSULE, "utf8")));
+console.log(JSON.stringify(result));
+if (!result.valid) process.exit(1);
+'
+```
+
+Expected: `{"valid":true,"errors":[]}`.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add .mcf/project-capsule.yaml docs/current-state.md tests/test_context_contract.sh
 git commit -m "context: add Hermes Operator project capsule"
 ```
 
@@ -154,12 +161,12 @@ git commit -m "context: add Hermes Operator project capsule"
 - Create: `tests/test_hermes_remote.sh`
 
 **Interfaces:**
-- Produces: executable `client/hermes-remote` deployed to notebook as `/home/leo/.local/bin/hermes-remote`.
-- Consumes: `/home/leo/.ssh/mcf-vps-control.conf`, SSH alias `mcf-vps-control`, remote executable `/home/ubuntu/.local/bin/hermes`.
+- Produces `client/hermes-remote`, deployed to notebook as `/home/leo/.local/bin/hermes-remote`.
+- Consumes `$HOME/.ssh/mcf-vps-control.conf`, alias `mcf-vps-control`, and remote `/home/ubuntu/.local/bin/hermes`.
 
-- [ ] **Step 1: Write failing shell tests**
+- [ ] **Step 1: Write the failing launcher test**
 
-Create `tests/test_hermes_remote.sh` that runs the launcher against stubbed `ssh` binaries injected through `PATH`. Cover four behaviors:
+Create `tests/test_hermes_remote.sh`:
 
 ```bash
 #!/usr/bin/env bash
@@ -187,20 +194,19 @@ export SSH_STUB_LOG="$TMP/ssh.log"
 
 : >"$SSH_STUB_LOG"
 "$CLIENT"
-grep -F -- '-F '"$TMP/home/.ssh/mcf-vps-control.conf" "$SSH_STUB_LOG"
+grep -F -- "-F $TMP/home/.ssh/mcf-vps-control.conf" "$SSH_STUB_LOG"
 grep -F -- 'mcf-vps-control' "$SSH_STUB_LOG"
 grep -F -- '/home/ubuntu/.local/bin/hermes chat' "$SSH_STUB_LOG"
 
 : >"$SSH_STUB_LOG"
-SSH_PREFLIGHT_RC=255 "$CLIENT" >"$TMP/out" 2>&1 && exit 1 || true
+if SSH_PREFLIGHT_RC=255 "$CLIENT" >"$TMP/out" 2>&1; then exit 1; fi
 grep -F 'Não foi possível acessar a VPS pelo SSH canônico.' "$TMP/out"
 
 ! grep -E '(BEGIN .*PRIVATE KEY|sk-|token=|api[_-]?key|password=)' "$CLIENT"
-
 echo PASS
 ```
 
-- [ ] **Step 2: Run the test and confirm RED**
+- [ ] **Step 2: Run and confirm RED**
 
 ```bash
 bash tests/test_hermes_remote.sh
@@ -208,9 +214,7 @@ bash tests/test_hermes_remote.sh
 
 Expected: FAIL because `client/hermes-remote` does not exist.
 
-- [ ] **Step 3: Implement the minimal client**
-
-Create `client/hermes-remote`:
+- [ ] **Step 3: Implement `client/hermes-remote`**
 
 ```bash
 #!/usr/bin/env bash
@@ -218,11 +222,9 @@ set -euo pipefail
 
 SSH_CONFIG="${HERMES_REMOTE_SSH_CONFIG:-$HOME/.ssh/mcf-vps-control.conf}"
 SSH_TARGET="${HERMES_REMOTE_SSH_TARGET:-mcf-vps-control}"
-REMOTE_HERMES="/home/ubuntu/.local/bin/hermes"
 
 fail() {
   printf '\nHermes Agent — %s\n' "$1" >&2
-  return 1
 }
 
 if [[ ! -f "$SSH_CONFIG" ]]; then
@@ -243,18 +245,15 @@ exec ssh -tt -F "$SSH_CONFIG" "$SSH_TARGET" \
   'exec /home/ubuntu/.local/bin/hermes chat'
 ```
 
-Do not add fallback hosts, direct IPs, local Hermes execution, provider overrides, or legacy relay calls.
-
-- [ ] **Step 4: Run tests and static checks**
+- [ ] **Step 4: Run tests and syntax checks**
 
 ```bash
 chmod +x client/hermes-remote tests/test_hermes_remote.sh
 bash -n client/hermes-remote
-shellcheck client/hermes-remote tests/test_hermes_remote.sh 2>/dev/null || true
 bash tests/test_hermes_remote.sh
 ```
 
-Expected: `PASS` from the contract test; `bash -n` exits 0. If `shellcheck` is installed, fix any real warnings in the files touched by this task.
+Expected: `PASS` and `bash -n` exits 0.
 
 - [ ] **Step 5: Commit**
 
@@ -265,7 +264,7 @@ git commit -m "feat: add Hermes SSH remote client"
 
 ---
 
-### Task 3: Add one-click notebook desktop entry and governed deployment contract
+### Task 3: Add the one-click desktop entry and deterministic installer
 
 **Files:**
 - Create: `client/Hermes Agent.desktop`
@@ -273,12 +272,12 @@ git commit -m "feat: add Hermes SSH remote client"
 - Create: `tests/test_notebook_deployment.sh`
 
 **Interfaces:**
-- Produces notebook artifacts `/home/leo/.local/bin/hermes-remote` and `/home/leo/Área de trabalho/Hermes Agent.desktop`.
-- Consumes repository artifacts from the canonical VPS checkout; does not clone the repository on the notebook.
+- Produces `/home/leo/.local/bin/hermes-remote` and `/home/leo/Área de trabalho/Hermes Agent.desktop`.
+- Does not clone the repository on the notebook.
 
 - [ ] **Step 1: Write the failing deployment test**
 
-The test must deploy into a temporary fake home and assert executable/desktop metadata without touching the real notebook desktop:
+Create `tests/test_notebook_deployment.sh`:
 
 ```bash
 #!/usr/bin/env bash
@@ -291,13 +290,13 @@ HOME="$TMP/home" DESKTOP_DIR="$TMP/home/Desktop" \
   bash "$ROOT/scripts/deploy-notebook-client.sh"
 
 test -x "$TMP/home/.local/bin/hermes-remote"
-grep -F 'Name=Hermes Agent' "$TMP/home/Desktop/Hermes Agent.desktop"
-grep -F 'Exec='"$TMP/home/.local/bin/hermes-remote" "$TMP/home/Desktop/Hermes Agent.desktop"
-grep -F 'Terminal=true' "$TMP/home/Desktop/Hermes Agent.desktop"
+grep -Fx 'Name=Hermes Agent' "$TMP/home/Desktop/Hermes Agent.desktop"
+grep -Fx "Exec=$TMP/home/.local/bin/hermes-remote" "$TMP/home/Desktop/Hermes Agent.desktop"
+grep -Fx 'Terminal=true' "$TMP/home/Desktop/Hermes Agent.desktop"
 echo PASS
 ```
 
-- [ ] **Step 2: Run the test and confirm RED**
+- [ ] **Step 2: Run and confirm RED**
 
 ```bash
 bash tests/test_notebook_deployment.sh
@@ -305,9 +304,7 @@ bash tests/test_notebook_deployment.sh
 
 Expected: FAIL because the deployment script/template do not exist.
 
-- [ ] **Step 3: Create the desktop template**
-
-Create `client/Hermes Agent.desktop` as the repository template:
+- [ ] **Step 3: Create `client/Hermes Agent.desktop`**
 
 ```ini
 [Desktop Entry]
@@ -321,19 +318,33 @@ StartupNotify=true
 Categories=Development;Utility;
 ```
 
-- [ ] **Step 4: Implement deployment script**
-
-Create `scripts/deploy-notebook-client.sh` that copies the repository-owned artifacts into the current user home, supports `DESKTOP_DIR`, creates parent directories, applies mode `0755` to the client and desktop entry, and rewrites only the `Exec=` path to the actual `$HOME/.local/bin/hermes-remote` when running in tests or another authorized user environment.
-
-Do not create SSH keys, modify SSH config, install packages, or copy repository history to the notebook.
-
-- [ ] **Step 5: Run tests**
+- [ ] **Step 4: Implement `scripts/deploy-notebook-client.sh`**
 
 ```bash
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN_DIR="$HOME/.local/bin"
+DESKTOP_DIR="${DESKTOP_DIR:-$HOME/Desktop}"
+CLIENT_DST="$BIN_DIR/hermes-remote"
+DESKTOP_DST="$DESKTOP_DIR/Hermes Agent.desktop"
+
+install -d "$BIN_DIR" "$DESKTOP_DIR"
+install -m 0755 "$ROOT/client/hermes-remote" "$CLIENT_DST"
+sed "s|^Exec=.*$|Exec=$CLIENT_DST|" "$ROOT/client/Hermes Agent.desktop" >"$DESKTOP_DST"
+chmod 0755 "$DESKTOP_DST"
+printf 'Hermes Remote Client instalado em %s\n' "$CLIENT_DST"
+printf 'Atalho instalado em %s\n' "$DESKTOP_DST"
+```
+
+- [ ] **Step 5: Run all Hermes repository tests**
+
+```bash
+chmod +x scripts/deploy-notebook-client.sh tests/test_notebook_deployment.sh
 bash -n scripts/deploy-notebook-client.sh
-bash tests/test_notebook_deployment.sh
+bash tests/test_context_contract.sh
 bash tests/test_hermes_remote.sh
-python3 -m pytest tests/test_context_capsule.py -q
+bash tests/test_notebook_deployment.sh
 ```
 
 Expected: all PASS.
@@ -347,21 +358,21 @@ git commit -m "feat: add one-click Hermes notebook launcher"
 
 ---
 
-### Task 4: Materialize the canonical Hermes Operator checkout on the VPS and deploy the thin client
+### Task 4: Clone the governed Hermes Operator project on the VPS and qualify the client
 
-**Files/locations:**
+**Locations:**
 - VPS checkout: `/home/ubuntu/leon337-hermes-operator`
-- Notebook executable: `/home/leo/.local/bin/hermes-remote`
+- Notebook binary: `/home/leo/.local/bin/hermes-remote`
 - Notebook desktop entry: `/home/leo/Área de trabalho/Hermes Agent.desktop`
 - Evidence: `docs/evidence/remote-client-v1-acceptance-2026-09-10.md`
 
 **Interfaces:**
-- Consumes: GitHub branch/PR after Tasks 1–3 pass.
-- Produces: operational thin client with no second notebook Hermes installation.
+- Consumes the GitHub implementation branch after Tasks 1–3 pass.
+- Produces the operational thin client while the Hermes runtime remains on the VPS.
 
-- [ ] **Step 1: Verify preconditions read-only**
+- [ ] **Step 1: Verify SSH/Hermes preconditions read-only**
 
-On notebook:
+On the notebook:
 
 ```bash
 test -f /home/leo/.ssh/mcf-vps-control.conf
@@ -371,49 +382,82 @@ ssh -F /home/leo/.ssh/mcf-vps-control.conf -o BatchMode=yes -o ConnectTimeout=8 
 
 Expected: `HERMES_REMOTE_PRECHECK_OK`.
 
-- [ ] **Step 2: Clone the governed project on the VPS from GitHub**
-
-Use the existing authorized GitHub authentication path on the VPS. The canonical checkout location is:
+- [ ] **Step 2: Verify GitHub access from the VPS**
 
 ```bash
-/home/ubuntu/leon337-hermes-operator
+ssh -F /home/leo/.ssh/mcf-vps-control.conf mcf-vps-control \
+  'git ls-remote https://github.com/leon337/leon337-hermes-operator.git HEAD >/dev/null && echo GITHUB_ACCESS_OK'
 ```
 
-If absent, clone `leon337/leon337-hermes-operator`; if present, verify its `origin` before any pull. Check out the approved implementation branch/commit. Do not copy a notebook working tree to the VPS.
+Expected: `GITHUB_ACCESS_OK`. If authentication is required, stop at `GITHUB_AUTH_REQUIRED`; do not copy a notebook checkout as a workaround.
 
-- [ ] **Step 3: Deploy notebook artifacts from the VPS checkout**
+- [ ] **Step 3: Clone from GitHub on the VPS**
 
-From the notebook, pull only the required source artifacts from the VPS checkout into a temporary directory with `scp -F /home/leo/.ssh/mcf-vps-control.conf`, then run `scripts/deploy-notebook-client.sh` locally. Remove the temporary deployment copy after verification.
+When the directory is absent:
 
-- [ ] **Step 4: End-to-end test the icon path**
+```bash
+ssh -F /home/leo/.ssh/mcf-vps-control.conf mcf-vps-control \
+  'git clone https://github.com/leon337/leon337-hermes-operator.git /home/ubuntu/leon337-hermes-operator'
+```
 
-Double-click **Hermes Agent** from the notebook desktop and verify:
+Then verify `origin`, fetch, and check out the approved implementation commit/branch. Never replace this with a copied working tree.
 
-1. a visible local terminal opens;
-2. `hermes chat` runs on the VPS, confirmed by process ownership/command on the VPS;
-3. the notebook has no newly installed Hermes runtime;
-4. send a benign test message: `Responda exatamente HERMES_REMOTE_V1_OK`;
-5. verify the response;
-6. observe provider/model using a non-secret Hermes status/config command in a separate read-only check;
-7. close the client terminal;
-8. confirm `hermes-provider.service`, `hermes-controller.service`, TriView, 9Router, SentinelX, DSHs, Docker, Tailscale, and GitHub Runner remain alive.
+- [ ] **Step 4: Pull only deployment artifacts to a temporary notebook directory**
 
-- [ ] **Step 5: Test failure behavior without changing real SSH state**
+```bash
+TMP="$(mktemp -d)"
+ssh -F /home/leo/.ssh/mcf-vps-control.conf mcf-vps-control \
+  'cd /home/ubuntu/leon337-hermes-operator && tar -cf - client scripts/deploy-notebook-client.sh' \
+  | tar -xf - -C "$TMP"
+HOME=/home/leo DESKTOP_DIR='/home/leo/Área de trabalho' \
+  bash "$TMP/scripts/deploy-notebook-client.sh"
+rm -rf "$TMP"
+```
 
-Run the installed client with:
+- [ ] **Step 5: End-to-end user-flow test**
+
+Double-click **Hermes Agent** and verify:
+
+1. a visible notebook terminal opens;
+2. VPS process inspection confirms `/home/ubuntu/.local/bin/hermes chat` runs on the VPS;
+3. the notebook has no Hermes runtime installed by this work;
+4. send `Responda exatamente HERMES_REMOTE_V1_OK`;
+5. verify `HERMES_REMOTE_V1_OK` is returned;
+6. inspect provider/model using a separate non-secret read-only Hermes status/config command;
+7. close only the client terminal;
+8. confirm persistent VPS services remain alive.
+
+- [ ] **Step 6: Failure-path test**
 
 ```bash
 HERMES_REMOTE_SSH_CONFIG=/tmp/nonexistent-hermes-ssh-config \
   /home/leo/.local/bin/hermes-remote
 ```
 
-Expected: visible Portuguese error and non-zero exit; no fallback connection attempt.
+Expected: clear Portuguese error and non-zero exit, with no alternate host/provider path.
 
-- [ ] **Step 6: Record sanitized acceptance evidence**
+- [ ] **Step 7: Record sanitized acceptance evidence**
 
-Create `docs/evidence/remote-client-v1-acceptance-2026-09-10.md` containing only command names, PASS/FAIL results, process location (VPS vs notebook), provider/model name if non-secret, and service-health checks. Do not record tokens, OAuth data, session contents beyond the benign test string, SSH private-key material, or private runtime logs.
+Create `docs/evidence/remote-client-v1-acceptance-2026-09-10.md` with:
 
-- [ ] **Step 7: Commit**
+```markdown
+# Hermes Remote Client V1 — Acceptance Evidence
+
+- Canonical runtime location: VPS
+- Notebook role: thin SSH client
+- Canonical SSH alias: `mcf-vps-control`
+- Remote command: `/home/ubuntu/.local/bin/hermes chat`
+- Benign response probe: `HERMES_REMOTE_V1_OK`
+- Notebook duplicate Hermes runtime: NOT CREATED
+- Legacy `MCF-HERMES-PC-002` auto-start: NOT USED
+- New public/Tailscale listener: NOT CREATED
+- Persistent service safety check: PASS
+- SSH failure path: FAIL-CLOSED / PASS
+```
+
+Append only sanitized provider/model name and PASS/FAIL observations; do not store credentials, OAuth data, private keys, tokens, or private conversation contents.
+
+- [ ] **Step 8: Commit evidence**
 
 ```bash
 git add docs/evidence/remote-client-v1-acceptance-2026-09-10.md
@@ -428,56 +472,85 @@ git commit -m "evidence: qualify Hermes Remote Client V1"
 
 **Files:**
 - Create: `context/projects/leon337-hermes-operator.yaml`
-- Modify: `apps/rede-social-agentes/apps/server/src/mcf-context/mcf-context-fixtures.test.ts`
-- Modify: `apps/rede-social-agentes/apps/server/src/mcf-context/project-resolver.test.ts`
+- Create: `apps/rede-social-agentes/apps/server/src/mcf-context/hermes-operator-registry.test.ts`
 
 **Interfaces:**
-- Consumes: merged Hermes Operator capsule and canonical entrypoints.
-- Produces: durable Context Fabric discovery for canonical id, repository, and approved aliases.
+- Consumes the merged Hermes Operator capsule/current-state/entrypoints.
+- Produces durable Context Fabric discovery and alias resolution.
 
-- [ ] **Step 1: Create an isolated MCF branch/worktree from current `main`**
+- [ ] **Step 1: Create isolated MCF branch/worktree**
 
-Branch name:
+Branch:
 
 ```text
 feat/context-register-hermes-operator
 ```
 
-Verify the base SHA against current GitHub `main` before editing.
+Create it from the current GitHub `main` SHA and use a separate worktree so no other MCF work is mixed into this change.
 
-- [ ] **Step 2: Write failing fixture/resolver tests**
+- [ ] **Step 2: Write the failing MCF test**
 
-Extend `mcf-context-fixtures.test.ts` to load `context/projects/leon337-hermes-operator.yaml`, assert the exact project id/repository/aliases/owner/capsule path/freshness, and validate it with `project-registry-entry.schema.json`.
+Create `apps/rede-social-agentes/apps/server/src/mcf-context/hermes-operator-registry.test.ts`:
 
-Extend `project-resolver.test.ts` with one focused test that constructs the Hermes entry and verifies all of these hints resolve to `leon337-hermes-operator`:
+```ts
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-```text
-leon337-hermes-operator
-leon337/leon337-hermes-operator
-Hermes Operator
-Hermes Agent
-Hermes
+import type { McfProjectRegistryEntry } from '@rsa/contracts';
+import { parse } from 'yaml';
+import { describe, expect, it } from 'vitest';
+
+import { ContextSchemaValidator } from './context-schema.validator.js';
+import { resolveProject } from './project-resolver.js';
+
+const root = fileURLToPath(new URL('../../../../../../', import.meta.url));
+const registryPath = join(root, 'context/projects/leon337-hermes-operator.yaml');
+const schemaPath = join(root, 'schemas/context/project-registry-entry.schema.json');
+
+function entry(): McfProjectRegistryEntry {
+  return parse(readFileSync(registryPath, 'utf8')) as McfProjectRegistryEntry;
+}
+
+describe('Hermes Operator Context Fabric registration', () => {
+  it('validates the canonical registry entry', () => {
+    const value = entry();
+    const validator = new ContextSchemaValidator(schemaPath);
+    expect(validator.validate(value)).toEqual({ valid: true, errors: [] });
+    expect(value).toMatchObject({
+      project: { id: 'leon337-hermes-operator', lifecycle: 'REGISTERED' },
+      identity: { canonical_repository: 'leon337/leon337-hermes-operator' },
+      ownership: { project_owner: 'LEANDRO' },
+      freshness: { operational_state: 'LIVE_REQUIRED', project_identity: 'DURABLE' },
+    });
+  });
+
+  it('resolves canonical id, repository, and approved aliases', () => {
+    const value = entry();
+    for (const hint of [
+      'leon337-hermes-operator',
+      'leon337/leon337-hermes-operator',
+      'Hermes Operator',
+      'Hermes Agent',
+      'Hermes',
+    ]) {
+      expect(resolveProject([value], hint)).toMatchObject({
+        outcome: 'RESOLVED',
+        project_id: 'leon337-hermes-operator',
+      });
+    }
+  });
+});
 ```
 
-- [ ] **Step 3: Run the focused tests and confirm RED**
-
-From `apps/rede-social-agentes`:
+- [ ] **Step 3: Run and confirm RED**
 
 ```bash
-pnpm --filter @rsa/server test -- \
-  src/mcf-context/mcf-context-fixtures.test.ts \
-  src/mcf-context/project-resolver.test.ts
+cd apps/rede-social-agentes/apps/server
+pnpm exec vitest run src/mcf-context/hermes-operator-registry.test.ts
 ```
 
-If the package script does not forward file arguments under this pnpm/vitest version, run:
-
-```bash
-pnpm exec vitest run \
-  apps/server/src/mcf-context/mcf-context-fixtures.test.ts \
-  apps/server/src/mcf-context/project-resolver.test.ts
-```
-
-Expected: FAIL because the Hermes registry file does not yet exist.
+Expected: FAIL because `context/projects/leon337-hermes-operator.yaml` does not exist.
 
 - [ ] **Step 4: Create the registry entry**
 
@@ -513,78 +586,73 @@ freshness:
   project_identity: DURABLE
 ```
 
-- [ ] **Step 5: Run focused and repository verification**
-
-Run:
+- [ ] **Step 5: Run focused MCF verification**
 
 ```bash
-cd apps/rede-social-agentes
+cd apps/rede-social-agentes/apps/server
 pnpm exec vitest run \
-  apps/server/src/mcf-context/context-schema.validator.test.ts \
-  apps/server/src/mcf-context/mcf-context-fixtures.test.ts \
-  apps/server/src/mcf-context/project-resolver.test.ts
-pnpm format:check
-pnpm typecheck
+  src/mcf-context/hermes-operator-registry.test.ts \
+  src/mcf-context/context-schema.validator.test.ts \
+  src/mcf-context/project-resolver.test.ts
+pnpm run typecheck
 ```
 
-If time/cost permits before PR, run the full workspace gate:
+Then from `apps/rede-social-agentes` run:
 
 ```bash
-pnpm verify
+pnpm format:check
+pnpm lint
 ```
 
-Expected: all focused Context Fabric tests PASS and no unrelated regression introduced by the new registry entry.
+Expected: all commands exit 0.
 
 - [ ] **Step 6: Commit and open MCF PR**
 
 ```bash
 git add context/projects/leon337-hermes-operator.yaml \
-  apps/rede-social-agentes/apps/server/src/mcf-context/mcf-context-fixtures.test.ts \
-  apps/rede-social-agentes/apps/server/src/mcf-context/project-resolver.test.ts
+  apps/rede-social-agentes/apps/server/src/mcf-context/hermes-operator-registry.test.ts
 git commit -m "context: register Hermes Operator"
 ```
 
-Open a PR to `main` titled:
+Open PR title:
 
 ```text
 Context: register Hermes Operator
 ```
 
-The PR description must state that operational state remains `LIVE_REQUIRED` and that the registry entry does not authorize Hermes material actions.
+PR body must explicitly state that `LIVE_REQUIRED` prevents repository state from authorizing or proving live Hermes operations.
 
 ---
 
-### Task 6: Final reconciliation, merge order, and acceptance
+### Task 6: Reconcile final state and merge in safe order
 
 **Files:**
 - Update: `docs/current-state.md`
 - Update: `.mcf/project-capsule.yaml`
-- Update: Hermes Operator PR description
-- Review: MCF registry PR
+- Review: Hermes Operator PR and MCF Context Fabric PR
 
 **Interfaces:**
-- Produces: canonical GitHub state aligned with deployed runtime and Context Fabric discovery.
+- Produces final canonical GitHub state aligned with deployed runtime and Context Fabric discovery.
 
-- [ ] **Step 1: Merge/order gate**
+- [ ] **Step 1: Enforce merge order**
 
-Use this order:
+Use exactly this order:
 
 ```text
-1. Hermes Operator tests + remote-client acceptance PASS
-2. Hermes Operator PR merged to main
-3. VPS canonical checkout updated from GitHub main
-4. MCF registry branch rebased/validated against current MCF main
-5. MCF Context Fabric PR reviewed and merged
-6. Live Context Fabric resolution checked
+1. Hermes repository tests PASS
+2. Remote Client V1 live acceptance PASS
+3. Hermes Operator PR merges to main
+4. VPS checkout updates from GitHub main
+5. MCF registry branch rebases/validates against current MCF main
+6. MCF Context Fabric PR merges
+7. Live Context Fabric resolution is verified
 ```
 
-Do not merge the MCF registration before step 2.
+- [ ] **Step 2: Refresh durable Hermes state after qualification**
 
-- [ ] **Step 2: Update Hermes durable current state after successful acceptance**
+Update `docs/current-state.md` to state that Remote Client V1 is qualified and Context Fabric registration is the active integration step.
 
-Change the durable status to indicate Remote Client V1 is implemented and qualified, while keeping live runtime facts behind `LIVE_REQUIRED`.
-
-Update `.mcf/project-capsule.yaml` with a new real `observed_at` timestamp and a durable snapshot such as:
+Refresh `.mcf/project-capsule.yaml` with a real UTC timestamp and exactly this durable snapshot:
 
 ```yaml
 snapshot:
@@ -594,39 +662,41 @@ snapshot:
   blockers: []
 ```
 
-- [ ] **Step 3: Verify Context Fabric resolution after registry merge**
+- [ ] **Step 3: Re-run Hermes capsule and client tests**
 
-Use the MCF resolver/recovery path to check the canonical id plus aliases:
-
-```text
-leon337-hermes-operator
-Hermes Operator
-Hermes Agent
-Hermes
+```bash
+bash tests/test_context_contract.sh
+bash tests/test_hermes_remote.sh
+bash tests/test_notebook_deployment.sh
 ```
 
-Expected: each resolves to `project_id=leon337-hermes-operator`; runtime health remains a live-verification concern.
+Expected: all PASS.
 
-- [ ] **Step 4: Final service-safety check**
+- [ ] **Step 4: Verify Context Fabric after registry merge**
 
-Verify the same critical services observed before deployment remain available and that no new public listener was created by Remote Client V1. Specifically confirm no new public/Tailscale listener for Hermes/Qwen/controller was introduced.
+Run the dedicated MCF test against merged `main`:
 
-- [ ] **Step 5: Final commit/PR evidence**
+```bash
+cd apps/rede-social-agentes/apps/server
+pnpm exec vitest run src/mcf-context/hermes-operator-registry.test.ts
+```
 
-Commit the final current-state/capsule refresh to the Hermes Operator PR or a small follow-up PR if the implementation PR has already merged. Record the MCF registry commit/PR reference in sanitized project evidence.
+Expected: PASS for canonical id, repository, and all three aliases.
+
+- [ ] **Step 5: Final live safety check**
+
+Verify no new listener was introduced for Hermes/Qwen/controller, and confirm the existing critical services remain available. The final report must separate durable Git state from live observations.
 
 ## Final Definition of Done
 
-Remote Client V1 is complete only when:
-
-- the **Hermes Agent** desktop icon on the notebook opens a terminal that runs `hermes chat` on the VPS;
-- the notebook contains no second Hermes runtime created by this work;
-- the canonical Hermes runtime remains on the VPS;
-- the user can send and receive a benign chat message;
-- provider/model can be observed without exposing credentials;
-- closing the client does not stop persistent services;
-- failure of the canonical SSH path is explicit and fail-closed;
-- Hermes Operator contains a valid `.mcf/project-capsule.yaml` and durable current-state document;
-- MCF contains `context/projects/leon337-hermes-operator.yaml` validated by the current schema;
-- the MCF resolver resolves the canonical id, repository, and approved aliases;
-- operational health remains `LIVE_REQUIRED` and is never inferred from Git state.
+- Notebook icon **Hermes Agent** opens a visible terminal that runs `hermes chat` on the VPS.
+- No second Hermes runtime is installed on the notebook.
+- The canonical Hermes runtime remains on the VPS.
+- A benign user message completes end-to-end.
+- Provider/model can be observed without exposing credentials.
+- Closing the client leaves persistent VPS services running.
+- Canonical SSH failure is explicit and fail-closed.
+- Hermes Operator contains a valid `.mcf/project-capsule.yaml` and durable current-state document.
+- MCF contains `context/projects/leon337-hermes-operator.yaml` validated by the current schema.
+- Context Fabric resolves canonical id, repository, and aliases `Hermes Operator`, `Hermes Agent`, and `Hermes`.
+- Operational health remains `LIVE_REQUIRED` and is never inferred from Git state.
