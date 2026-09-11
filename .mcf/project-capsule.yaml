@@ -1,0 +1,12 @@
+schema_version: 1
+project_id: leon337-hermes-operator
+purpose: Govern and extend the official Nous Research Hermes Agent as an MCF-controlled autonomous operator while keeping LEANDRO as final human authority.
+lifecycle: ACTIVE
+snapshot:
+  current_workstream: remote-client-v1-context-fabric
+  current_status: DESIGN_APPROVED_IMPLEMENTATION_IN_PROGRESS
+  next_action: Implement and verify Remote Client V1, then register Hermes Operator in the MCF Context Fabric.
+  blockers: []
+sources:
+  current_state: docs/current-state.md
+observed_at: "2026-09-11T03:10:07Z"
