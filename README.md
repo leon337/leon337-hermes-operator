@@ -17,13 +17,21 @@ A estratégia é configurar e estender o Hermes oficial por profiles, skills, po
 
 - Project Intent Package: `ALIGNED`
 - Intent Alignment Receipt: `PASS`
-- Implementação: **não iniciada**
-- Instalação do Hermes no host: **não executada**
-- Arquitetura final: **não congelada**
-- Fase atual: reconciliação de continuidade e preparação da missão técnica
+- Remote Client V1: **QUALIFIED**
+- Runtime Hermes canônico: **VPS**
+- Notebook: **thin human client**
+- MCF Context Fabric: **REGISTERED**
+- Estado operacional do runtime/provider/model/sessão: **LIVE_REQUIRED**
+- Workstream `remote-client-v1-context-fabric`: **COMPLETE**
+
+O antigo desenho notebook-local de computer-use permanece como contexto histórico e não define o boundary do Remote Client V1. Mudanças futuras de capacidade ou runtime exigem um novo workstream aprovado por LEANDRO.
 
 ## Documentos canônicos
 
+- `docs/current-state.md`
+- `.mcf/project-capsule.yaml`
+- `docs/superpowers/specs/2026-09-10-hermes-remote-client-context-fabric-design.md`
+- `docs/evidence/remote-client-v1-acceptance-2026-09-10.md`
 - `docs/governance/project-intent-package.md`
 - `docs/governance/intent-alignment-receipt.md`
 - `docs/missions/MCF-HERMES-PC-001.md`
