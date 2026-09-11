@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Hermes Agent
+Comment=Conversar com o Hermes canônico na VPS
+Exec=/home/leo/.local/bin/hermes-remote-client
+Icon=utilities-terminal
+Terminal=true
+StartupNotify=true
+Categories=Development;Utility;
